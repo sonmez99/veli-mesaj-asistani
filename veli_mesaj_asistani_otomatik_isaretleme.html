@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2a44">
+<title>Veli Mesaj Asistanı</title>
+<style>
+:root{--navy:#1f2a44;--purple:#7c5cff;--mint:#2ed3b7;--bg:#f5f7fa;--ink:#20283a;--muted:#687287;--line:#dfe4ec}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:var(--navy);color:white;padding:22px 18px 20px;border-radius:0 0 22px 22px}header h1{font-size:23px;margin:0 0 5px}header p{margin:0;color:#dbe1ee;font-size:14px}
+main{max-width:720px;margin:auto;padding:16px 14px 40px}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 3px 12px #1f2a4408}
+h2{font-size:17px;margin:0 0 12px}.row{display:flex;gap:8px;align-items:center}.row>*{min-width:0}.row input{flex:1}
+input,select,textarea{font:inherit;width:100%;padding:11px 12px;border:1px solid #cfd6e2;border-radius:10px;background:white;color:var(--ink);margin:4px 0 9px}
+button{font:inherit;font-weight:650;border:0;border-radius:10px;padding:11px 13px;cursor:pointer;background:var(--purple);color:white}
+button.secondary{background:#eef0f6;color:var(--navy)}button.green{background:#16866f}button.red{background:#b33b4b}button.small{padding:8px 10px;font-size:13px}
+.student{display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #edf0f5}.student:last-child{border-bottom:0}.student input[type=checkbox]{width:20px;height:20px;margin:0;flex:none}.student.sent{background:#e8f8ef;margin:0 -8px;padding:11px 8px;border-radius:8px}.student.sent .name{color:#176b42}.student .name{font-weight:650;flex:1}.sub{font-size:12px;color:var(--muted);margin-top:2px}.badge{font-size:12px;padding:4px 7px;border-radius:7px;background:#fff1d6;color:#805700}.empty{color:var(--muted);font-size:14px;padding:8px 0}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}.hint{font-size:13px;line-height:1.45;color:var(--muted)}.status{font-size:13px;margin-top:8px;color:#8a4b00}.hidden{display:none!important}.contactline{font-size:13px;color:var(--muted);margin:0 0 7px}.danger{color:#9b2434}.footer{font-size:12px;color:var(--muted);text-align:center;padding:8px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<header><h1>📚 Veli Mesaj Asistanı</h1><p>Öğrenciyi seç, mesajı hazırla, WhatsApp'ta gönder.</p></header>
+<main>
+<section class="card">
+<h2>1. Sınıf ve öğrenci ekle</h2>
+<div class="row">
+  <div style="flex:1"><label for="newClass">Sınıf</label><select id="newClass"></select></div>
+  <button class="secondary" id="addClass" style="align-self:flex-end;margin-bottom:9px">Sınıf ekle</button><button class="red" id="deleteClass" style="align-self:flex-end;margin-bottom:9px">Sınıfı sil</button>
+</div>
+<label for="studentName">Öğrencinin adı soyadı</label>
+<div class="row"><input id="studentName" placeholder="Örn. Ahmet Yılmaz"><button id="addStudent">Ekle</button></div>
+<p class="hint">Sınıflar ve öğrenci bilgileri bu telefondaki tarayıcıda saklanır. Excel'den toplu yükleme için aşağıdaki bölümü kullanabilirsin.</p>
+</section>
+<section class="card">
+<h2>2. Öğrenci listesi</h2>
+<label for="classFilter">Sınıfa göre görüntüle</label>
+<div class="row"><select id="classFilter"></select><input id="search" placeholder="Öğrenci ara…"></div><div class="actions"><button class="secondary small" id="toggleUnsent">Gönderilmeyenleri göster</button><button class="secondary small" id="resetSent">Gönderim işaretlerini sıfırla</button></div>
+<p class="hint">WhatsApp sohbeti açıldığında öğrenci otomatik olarak gönderildi işaretlenir ve yeşil görünür. Uygulama mesajın gerçekten gönderilip gönderilmediğini algılayamaz; göndermediysen öğrencinin yanındaki “İşareti geri al” düğmesine basabilirsin.</p><div id="students"></div>
+<div class="actions" style="margin-top:12px"><button class="secondary" id="selectAll">Tümünü seç</button><button class="secondary" id="clearAll">Seçimi temizle</button></div>
+</section>
+<section class="card">
+<h2>3. Excel'den toplu öğrenci yükle</h2>
+<p class="hint">Excel dosyasında şu sütunlar olsun: <b>Sınıf</b>, <b>Öğrenci Adı Soyadı</b>, <b>Veli Telefonu</b>. İlk satır başlık olmalı. .xlsx, .xls ve .csv dosyaları desteklenir.</p>
+<div class="actions">
+<button class="green" id="importExcel">Excel/CSV dosyası seç</button>
+<button class="secondary" id="downloadTemplate">Örnek Excel şablonu indir</button>
+</div>
+<input id="excelFile" type="file" accept=".xlsx,.xls,.csv" class="hidden">
+<div id="importStatus" class="status" aria-live="polite"></div>
+<p class="hint">İçe aktarma sırasında aynı isim ve sınıftaki öğrenci zaten varsa tekrar eklenmez; mevcut kaydın veli numarası boşsa Excel'deki numara eklenir.</p>
+</section>
+
+<section class="card">
+<h2>4. Mesajı hazırla</h2>
+<label for="template">Mesaj türü</label>
+<select id="template">
+<option value="regular">Ödevlerini düzenli yapıyor</option>
+<option value="sometimes">Ödevlerini ara sıra yapıyor</option>
+<option value="notdoing">Ödevlerini yapmıyor</option>
+<option value="custom">Kendi mesajımı yazacağım</option>
+</select>
+<label for="message">Mesaj metni (göndermeden önce düzenleyebilirsin)</label>
+<textarea id="message" rows="6"></textarea>
+<div class="actions"><button class="secondary" id="refreshMessage">Mesajı yenile</button><button class="green" id="sendSelected">Seçili velilere WhatsApp'ta aç</button></div>
+<p class="hint">WhatsApp her veli için ayrı açılır. Mesaj otomatik gönderilmez; son gönderme düğmesine sen basarsın. Birden fazla öğrenci seçersen sohbetleri sırayla açman gerekir.</p>
+<div id="sendStatus" class="status"></div>
+</section>
+<section class="card">
+<h2>Veli numarasını eşleştirme</h2>
+<p class="hint">Listede öğrencinin yanındaki “Veli seç” düğmesine bas. Android Chrome destekliyorsa rehber seçicisi açılır. Desteklenmiyorsa telefon numarasını uluslararası biçimde elle girebilirsin (Türkiye için 90 ile başlayıp baştaki 0'ı yazmadan, ör. 905xxxxxxxxx).</p>
+</section>
+
+<section class="card">
+<h2>5. Verileri yedekle / geri yükle</h2>
+<p class="hint">Öğrenci adlarını ve veli telefon numaralarını JSON dosyası olarak telefonuna kaydedebilirsin. Bu dosyayı GitHub'a yükleme; kişisel bilgilerini içerir.</p>
+<div class="actions">
+<button class="green" id="backupData">Yedekle (JSON indir)</button>
+<button class="secondary" id="restoreData">Yedekten geri yükle</button>
+</div>
+<input id="backupFile" type="file" accept=".json,application/json" class="hidden">
+<div id="backupStatus" class="status" aria-live="polite"></div>
+</section>
+
+<div class="footer">Bilgiler bu tarayıcıda tutulur. Tarayıcı verilerini silersen liste silinebilir.</div>
+</main>
+<script>
+const KEY='veliMesajAsistani_v1';
+const CLASS_KEY='veliMesajAsistani_classes_v1';
+let data=JSON.parse(localStorage.getItem(KEY)||'[]');
+let classes=JSON.parse(localStorage.getItem(CLASS_KEY)||'[]');
+data=data.map(s=>({...s,className:(s.className||s.class||'Sınıfsız').trim()||'Sınıfsız'}));
+if(!Array.isArray(classes))classes=[];
+data.forEach(s=>{if(!classes.includes(s.className))classes.push(s.className)});
+if(!classes.length)classes=['5/A'];
+let selected=new Set();
+let showUnsent=false;
+const $=id=>document.getElementById(id);
+const templates={
+ regular:n=>`Merhaba, ${n}’nin ödevlerini düzenli olarak yaptığını belirtmek isterim. Sorumluluklarını yerine getirmesi beni mutlu ediyor. Desteğiniz için teşekkür ederim.`,
+ sometimes:n=>`Merhaba, ${n}’nin ödevlerini zaman zaman yaptığını, ancak düzenlilik konusunda desteğe ihtiyaç duyduğunu paylaşmak isterim. Evde de ödevlerini takip etmeniz konusunda desteğinizi rica ederim. Teşekkür ederim.`,
+ notdoing:n=>`Merhaba, ${n}’nin son dönemde ödevlerini düzenli yapmadığını bildirmek isterim. Ödev sorumluluğunu kazanması için evde de destek olmanızı rica ederim. İlginiz için teşekkür ederim.`,
+ custom:n=>`Merhaba, ${n} hakkında sizinle kısa bir bilgi paylaşmak istiyorum.\n\n`
+};
+function save(){localStorage.setItem(KEY,JSON.stringify(data));localStorage.setItem(CLASS_KEY,JSON.stringify(classes));render()}
+function refreshClassSelectors(){
+ const newClass=$('newClass'),filter=$('classFilter');
+ const previousNew=newClass.value,previousFilter=filter.value;
+ newClass.innerHTML='';filter.innerHTML='<option value="*">Tüm sınıflar</option>';
+ classes.forEach(c=>{
+  const o=document.createElement('option');o.value=c;o.textContent=c;newClass.appendChild(o);
+  const f=document.createElement('option');f.value=c;f.textContent=c;filter.appendChild(f);
+ });
+ if(previousNew&&classes.includes(previousNew))newClass.value=previousNew;
+ if(previousFilter==='*'||classes.includes(previousFilter))filter.value=previousFilter||'*';
+ else filter.value='*';
+}
+function addClassName(name){
+ name=String(name||'').trim();
+ if(!name)return false;
+ if(classes.some(c=>c.toLocaleLowerCase('tr')===name.toLocaleLowerCase('tr'))){
+  alert('Bu sınıf zaten var.');return false;
+ }
+ classes.push(name);classes.sort((a,b)=>a.localeCompare(b,'tr',{numeric:true}));
+ localStorage.setItem(CLASS_KEY,JSON.stringify(classes));refreshClassSelectors();
+ $('newClass').value=name;$('classFilter').value=name;
+ return true;
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){
+ const q=$('search').value.trim().toLocaleLowerCase('tr');
+ const host=$('students');host.innerHTML='';
+ const classValue=$('classFilter').value||'*';
+ const filtered=data.filter(s=>(classValue==='*'||s.className===classValue)&&s.name.toLocaleLowerCase('tr').includes(q)&&(!showUnsent||!s.sent));
+ if(!filtered.length){host.innerHTML='<div class="empty">Henüz öğrenci yok. Yukarıdan öğrenci ekleyebilirsin.</div>';return}
+ filtered.forEach(s=>{
+  const el=document.createElement('div');el.className='student'+(s.sent?' sent':'');
+  const checked=selected.has(s.id)?'checked':'';
+  const contact=s.phone?`<div class="sub">Veli: ${esc(s.phone)}</div>`:'<div class="sub">Veli numarası eşleştirilmedi</div>';
+  el.innerHTML=`<input type="checkbox" aria-label="Seç" ${checked}><div class="name">${esc(s.name)}<div class="sub">${esc(s.className||'Sınıfsız')}</div>${contact}</div><button class="secondary small contact">Veli seç</button><button class="secondary small edit">Düzenle</button><button class="${s.sent?'secondary':'green'} small sentToggle">${s.sent?'İşareti geri al':'Gönderildi'}</button><button class="secondary small delete" aria-label="Sil">Sil</button>`;
+  el.querySelector('input').addEventListener('change',e=>{e.target.checked?selected.add(s.id):selected.delete(s.id)});
+  el.querySelector('.sentToggle').onclick=()=>{s.sent=!s.sent;save()};
+   el.querySelector('.contact').onclick=()=>chooseContact(s.id);
+  el.querySelector('.edit').onclick=()=>editStudent(s.id);
+  el.querySelector('.delete').onclick=()=>{if(confirm(s.name+' silinsin mi?')){data=data.filter(x=>x.id!==s.id);selected.delete(s.id);save()}};
+  host.appendChild(el);
+ });
+}
+function chooseContact(id){
+ const s=data.find(x=>x.id===id);if(!s)return;
+ if(navigator.contacts&&navigator.contacts.select){
+  navigator.contacts.select(['name','tel'],{multiple:false}).then(contacts=>{
+   if(!contacts.length)return;
+   const c=contacts[0];const name=(c.name&&c.name[0])||'';
+   const phone=(c.tel&&c.tel[0])||'';
+   if(phone){s.phone=normalize(phone);if(name&&!confirm(`Seçilen kişi: ${name}\nNumara: ${s.phone}\nBu numara ${s.name} için kaydedilsin mi?`))return;save()}
+   else manualPhone(s);
+  }).catch(()=>manualPhone(s));
+ }else manualPhone(s);
+}
+function normalize(v){return String(v).replace(/[^\d+]/g,'').replace(/^00/,'').replace(/^\+/, '')}
+function manualPhone(s){
+ const old=s.phone||'';
+ const v=prompt(`${s.name} velisinin WhatsApp numarası.\nTürkiye numarası örneği: 905xxxxxxxxx`,old);
+ if(v===null)return;
+ const p=normalize(v);
+ if(p.length<10){alert('Numara kısa görünüyor. Ülke koduyla birlikte kontrol et.');return}
+ s.phone=p;save();
+}
+function editStudent(id){
+ const s=data.find(x=>x.id===id);if(!s)return;
+ const v=prompt('Öğrencinin adı soyadı:',s.name);if(v===null)return;
+ if(!v.trim())return;
+ s.name=v.trim();save();
+}
+$('addStudent').onclick=()=>{const name=$('studentName').value.trim();if(!name){alert('Öğrenci adını yaz.');return}const className=$('newClass').value||'Sınıfsız';data.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name,phone:'',className});$('studentName').value='';$('classFilter').value=className;save()};
+$('studentName').addEventListener('keydown',e=>{if(e.key==='Enter')$('addStudent').click()});
+$('addClass').onclick=()=>{const name=prompt('Yeni sınıf adı (ör. 5/A):');if(addClassName(name)){save()}};
+$('deleteClass').onclick=()=>{
+ const c=$('newClass').value;
+ if(!c){alert('Önce silinecek sınıfı seç.');return}
+ const count=data.filter(s=>s.className===c).length;
+ const warning=count?`\n\nDİKKAT: Bu sınıfta ${count} öğrenci var. Sınıfla birlikte bu öğrenciler de silinecek.`:'';
+ if(!confirm(`“${c}” sınıfı silinsin mi?${warning}\nBu işlem geri alınamaz.`))return;
+ data=data.filter(s=>s.className!==c);selected.clear();classes=classes.filter(x=>x!==c);
+ if(!classes.length)classes=['5/A'];
+ localStorage.setItem(CLASS_KEY,JSON.stringify(classes));save();refreshClassSelectors();
+ $('classFilter').value='*';render();
+};
+$('toggleUnsent').onclick=()=>{showUnsent=!showUnsent;$('toggleUnsent').textContent=showUnsent?'Tüm öğrencileri göster':'Gönderilmeyenleri göster';render()};
+$('resetSent').onclick=()=>{
+ const c=$('classFilter').value||'*';
+ const scope=c==='*'?'tüm sınıflardaki':`“${c}” sınıfındaki`;
+ if(!confirm(`${scope} öğrencilerin gönderim işaretleri sıfırlansın mı?`))return;
+ data.forEach(s=>{if(c==='*'||s.className===c)s.sent=false});save();
+};
+$('classFilter').addEventListener('change',render);
+$('search').addEventListener('input',render);
+$('selectAll').onclick=()=>{data.forEach(s=>selected.add(s.id));render()};
+$('clearAll').onclick=()=>{selected.clear();render()};
+function selectedStudents(){return data.filter(s=>selected.has(s.id))}
+function buildMessage(names){
+ const type=$('template').value;
+ if(type==='custom')return templates.custom(names.join(', '));
+ if(names.length===1)return templates[type](names[0]);
+ return names.map(n=>templates[type](n)).join('\n\n———\n\n');
+}
+function refreshMessage(){const names=selectedStudents().map(s=>s.name);$('message').value=names.length?buildMessage(names):''}
+$('template').onchange=refreshMessage;
+$('refreshMessage').onclick=refreshMessage;
+$('sendSelected').onclick=()=>{
+ const chosen=selectedStudents();
+ if(!chosen.length){alert('Önce en az bir öğrenci seç.');return}
+ const missing=chosen.filter(s=>!s.phone);
+ if(missing.length){alert('Önce şu öğrencilerin velilerini eşleştir:\n'+missing.map(s=>'• '+s.name).join('\n'));return}
+ const text=$('message').value.trim();if(!text){alert('Mesaj metni boş.');return}
+ const ready=chosen.filter(s=>s.phone);
+ if(ready.length>1&&!confirm(`${ready.length} WhatsApp sohbeti sırayla açılacak. Her birinde gönder düğmesine sen basmalısın. Devam edilsin mi?`))return;
+ let i=0;
+ function next(){
+  if(i>=ready.length){$('sendStatus').textContent='Seçilen velilerin sohbetleri açıldı. Öğrenciler otomatik işaretlendi; her WhatsApp sohbetinde mesajı kontrol edip kendin gönder.';return}
+  const s=ready[i++];
+  // Her veliye yalnızca kendi öğrencisinin mesajını gönder.
+  // Hazır şablonlarda mesajı öğrenci adına göre yeniden oluştur; birleşik önizlemeyi kullanma.
+  const perText=$('template').value==='custom' ? text : templates[$('template').value](s.name);
+  $('sendStatus').textContent=`${i}/${ready.length}: ${s.name} velisinin WhatsApp sohbeti açılıyor. Öğrenci otomatik olarak gönderildi işaretlendi; WhatsApp'ta mesajı sen göndermelisin.`;
+  window.open('https://wa.me/'+s.phone+'?text='+encodeURIComponent(perText),'_blank');
+  // WhatsApp mesajının gönderildiği doğrulanamaz; sohbet açılır açılmaz otomatik işaretle.
+  s.sent=true; save();
+  if(i<ready.length){
+   const old=$('sendSelected');old.textContent='Sonraki veli ('+(i+1)+'/'+ready.length+')';
+   old.onclick=()=>next();
+  }else{
+   $('sendSelected').textContent='WhatsApp’ta tekrar aç';
+   $('sendSelected').onclick=()=>{window.open('https://wa.me/'+s.phone+'?text='+encodeURIComponent(text),'_blank')};
+  }
+ }
+ next();
+};
+
+function downloadBackup(){
+ const payload={
+  app:'Veli Mesaj Asistanı',
+  version:2,
+  createdAt:new Date().toISOString(),
+  classes,
+  students:data
+ };
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ const date=new Date().toISOString().slice(0,10);
+ a.href=url;a.download=`veli-mesaj-asistani-yedek-${date}.json`;
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+ $('backupStatus').textContent=`Yedek dosyası hazır. ${data.length} öğrenci kaydedildi. Dosyayı güvenli bir yerde sakla.`;
+}
+$('backupData').onclick=downloadBackup;
+$('restoreData').onclick=()=>{$('backupFile').click()};
+$('backupFile').addEventListener('change',async e=>{
+ const file=e.target.files&&e.target.files[0];
+ if(!file)return;
+ try{
+  const raw=JSON.parse(await file.text());
+  const incoming=Array.isArray(raw)?raw:raw&&Array.isArray(raw.students)?raw.students:null;
+  if(!incoming)throw new Error('Dosyada öğrenci listesi bulunamadı.');
+  const cleaned=incoming.map((s,i)=>{
+   if(!s||typeof s.name!=='string'||!s.name.trim())throw new Error(`${i+1}. öğrenci kaydı geçersiz.`);
+   const phone=typeof s.phone==='string'?normalize(s.phone):'';
+   const className=String(s.className||s.class||'Sınıfsız').trim()||'Sınıfsız';
+   return {id:typeof s.id==='string'&&s.id?s.id:(Date.now().toString(36)+Math.random().toString(36).slice(2,7)+i),name:s.name.trim(),phone,className,sent:!!s.sent};
+  });
+  const restoredClasses=raw&&!Array.isArray(raw)&&Array.isArray(raw.classes)?raw.classes.filter(c=>typeof c==='string'&&c.trim()).map(c=>c.trim()):[];
+  cleaned.forEach(s=>{if(!restoredClasses.includes(s.className))restoredClasses.push(s.className)});
+  if(!confirm(`${restoredClasses.length} sınıf ve ${cleaned.length} öğrenci yedekten yüklenecek. Mevcut listedeki ${data.length} öğrenci bununla değiştirilecek. Devam edilsin mi?`))return;
+  data=cleaned;classes=restoredClasses.length?restoredClasses:['Sınıfsız'];selected.clear();save();refreshClassSelectors();
+  $('backupStatus').textContent=`Geri yükleme tamamlandı: ${data.length} öğrenci yüklendi.`;
+  $('message').value='';
+ }catch(err){
+  alert('Yedek dosyası okunamadı: '+(err&&err.message?err.message:'Dosyanın geçerli bir JSON yedeği olduğundan emin ol.'));
+ }finally{
+  e.target.value='';
+ }
+});
+
+
+$('importExcel').onclick=()=>{$('excelFile').click()};
+$('downloadTemplate').onclick=()=>{
+ if(!window.XLSX){alert('Excel kütüphanesi yüklenemedi. İnternet bağlantını kontrol edip sayfayı yenile.');return}
+ const rows=[['Sınıf','Öğrenci Adı Soyadı','Veli Telefonu'],['5/A','Ahmet Yılmaz','905xxxxxxxxx'],['5/A','Ayşe Demir','905xxxxxxxxx'],['5/B','Mehmet Kaya','905xxxxxxxxx']];
+ const ws=XLSX.utils.aoa_to_sheet(rows);
+ ws['!cols']=[{wch:14},{wch:28},{wch:22}];
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Öğrenciler');
+ XLSX.writeFile(wb,'veli-mesaj-asistani-ornek-sablon.xlsx');
+};
+$('excelFile').addEventListener('change',async e=>{
+ const file=e.target.files&&e.target.files[0];if(!file)return;
+ try{
+  if(!window.XLSX)throw new Error('Excel dosyalarını okuyabilmek için internet bağlantısı gerekiyor. Sayfayı yenileyip tekrar dene.');
+  const buffer=await file.arrayBuffer();
+  const wb=XLSX.read(buffer,{type:'array',raw:false});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+  if(!rows.length)throw new Error('Dosyada başlık satırından sonra öğrenci kaydı bulunamadı.');
+  const norm=s=>String(s||'').toLocaleLowerCase('tr').replace(/[ıİ]/g,'i').replace(/[^a-z0-9]/g,'');
+  const keys=Object.keys(rows[0]);
+  const findKey=tests=>keys.find(k=>tests.includes(norm(k)));
+  const classKey=findKey(['sinif','sinifadi','sube','class','className'.toLowerCase()]);
+  const nameKey=findKey(['ogrenciadisoyadi','ogrenciadi','adsoyad','ogrenci','studentname','name']);
+  const phoneKey=findKey(['velitelefonu','velinumarasi','telefon','telefonnumarasi','telefonno','veli','phone','parentphone','tel']);
+  if(!nameKey)throw new Error('Öğrenci adı sütunu bulunamadı. Başlık: “Öğrenci Adı Soyadı” olmalı.');
+  const imported=rows.map((r,i)=>{
+   const name=String(r[nameKey]||'').trim();
+   if(!name)return null;
+   const className=String((classKey&&r[classKey])||'Sınıfsız').trim()||'Sınıfsız';
+   const phone=String((phoneKey&&r[phoneKey])||'').trim();
+   return {name,className,phone:phone?normalize(phone):''};
+  }).filter(Boolean);
+  if(!imported.length)throw new Error('Aktarılabilecek öğrenci bulunamadı.');
+  const newRows=[];let updated=0,skipped=0;
+  imported.forEach(s=>{
+   let existing=data.find(d=>d.name.trim().toLocaleLowerCase('tr')===s.name.toLocaleLowerCase('tr')&&(d.className||'Sınıfsız').toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr'));
+   if(existing){
+    if(!existing.phone&&s.phone){existing.phone=s.phone;updated++}else skipped++;
+   }else{
+    newRows.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,8)+newRows.length,name:s.name,phone:s.phone,className:s.className});
+   }
+   if(!classes.some(c=>c.toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr')))classes.push(s.className);
+  });
+  const addedClasses=classes.length;
+  data=data.concat(newRows);
+  if(!confirm(`Dosyadan ${imported.length} kayıt okundu.\nYeni eklenecek öğrenci: ${newRows.length}\nMevcut kayıtta telefon bilgisi tamamlanacak: ${updated}\nAtlanacak tekrar kayıt: ${skipped}\n\nDevam edilsin mi?`))return;
+  classes.sort((a,b)=>a.localeCompare(b,'tr',{numeric:true}));
+  save();refreshClassSelectors();
+  $('importStatus').textContent=`Aktarım tamamlandı: ${newRows.length} öğrenci eklendi, ${updated} telefon tamamlandı, ${skipped} tekrar kayıt atlandı.`;
+ }catch(err){alert('Excel aktarımı başarısız: '+(err&&err.message?err.message:'Dosyayı kontrol et.'))}
+ finally{e.target.value=''}
+});
+
+refreshClassSelectors();
+$('message').value='';
+render();
+</script>
+</body>
+</html>
