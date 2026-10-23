@@ -301,4 +301,44 @@ $('excelFile').addEventListener('change',async e=>{
   const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
   if(!rows.length)throw new Error('Dosyada başlık satırından sonra öğrenci kaydı bulunamadı.');
-  const no
+  const norm=s=>String(s||'').toLocaleLowerCase('tr').replace(/[ıİ]/g,'i').replace(/[^a-z0-9]/g,'');
+  const keys=Object.keys(rows[0]);
+  const findKey=tests=>keys.find(k=>tests.includes(norm(k)));
+  const classKey=findKey(['sinif','sinifadi','sube','class','className'.toLowerCase()]);
+  const nameKey=findKey(['ogrenciadisoyadi','ogrenciadi','adsoyad','ogrenci','studentname','name']);
+  const phoneKey=findKey(['velitelefonu','velinumarasi','telefon','telefonnumarasi','telefonno','veli','phone','parentphone','tel']);
+  if(!nameKey)throw new Error('Öğrenci adı sütunu bulunamadı. Başlık: “Öğrenci Adı Soyadı” olmalı.');
+  const imported=rows.map((r,i)=>{
+   const name=String(r[nameKey]||'').trim();
+   if(!name)return null;
+   const className=String((classKey&&r[classKey])||'Sınıfsız').trim()||'Sınıfsız';
+   const phone=String((phoneKey&&r[phoneKey])||'').trim();
+   return {name,className,phone:phone?normalize(phone):''};
+  }).filter(Boolean);
+  if(!imported.length)throw new Error('Aktarılabilecek öğrenci bulunamadı.');
+  const newRows=[];let updated=0,skipped=0;
+  imported.forEach(s=>{
+   let existing=data.find(d=>d.name.trim().toLocaleLowerCase('tr')===s.name.toLocaleLowerCase('tr')&&(d.className||'Sınıfsız').toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr'));
+   if(existing){
+    if(!existing.phone&&s.phone){existing.phone=s.phone;updated++}else skipped++;
+   }else{
+    newRows.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,8)+newRows.length,name:s.name,phone:s.phone,className:s.className});
+   }
+   if(!classes.some(c=>c.toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr')))classes.push(s.className);
+  });
+  const addedClasses=classes.length;
+  data=data.concat(newRows);
+  if(!confirm(`Dosyadan ${imported.length} kayıt okundu.\nYeni eklenecek öğrenci: ${newRows.length}\nMevcut kayıtta telefon bilgisi tamamlanacak: ${updated}\nAtlanacak tekrar kayıt: ${skipped}\n\nDevam edilsin mi?`))return;
+  classes.sort((a,b)=>a.localeCompare(b,'tr',{numeric:true}));
+  save();refreshClassSelectors();
+  $('importStatus').textContent=`Aktarım tamamlandı: ${newRows.length} öğrenci eklendi, ${updated} telefon tamamlandı, ${skipped} tekrar kayıt atlandı.`;
+ }catch(err){alert('Excel aktarımı başarısız: '+(err&&err.message?err.message:'Dosyayı kontrol et.'))}
+ finally{e.target.value=''}
+});
+
+refreshClassSelectors();
+$('message').value='';
+render();
+</script>
+</body>
+</html>
