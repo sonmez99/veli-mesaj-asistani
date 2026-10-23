@@ -35,7 +35,7 @@ button.secondary{background:#eef0f6;color:var(--navy)}button.green{background:#1
 <h2>2. Öğrenci listesi</h2>
 <label for="classFilter">Sınıfa göre görüntüle</label>
 <div class="row"><select id="classFilter"></select><input id="search" placeholder="Öğrenci ara…"></div><div class="actions"><button class="secondary small" id="toggleUnsent">Gönderilmeyenleri göster</button><button class="secondary small" id="resetSent">Gönderim işaretlerini sıfırla</button></div>
-<p class="hint">WhatsApp gönderimini uygulama otomatik doğrulayamaz. Mesajı gerçekten gönderdikten sonra öğrencinin yanındaki “Gönderildi” düğmesine bas; yeşil görünür. Yanlış işaretlemeyi geri alabilirsin.</p><div id="students"></div>
+<p class="hint">WhatsApp sohbeti açıldığında öğrenci otomatik olarak gönderildi işaretlenir ve yeşil görünür. Uygulama mesajın gerçekten gönderilip gönderilmediğini algılayamaz; göndermediysen öğrencinin yanındaki “İşareti geri al” düğmesine basabilirsin.</p><div id="students"></div>
 <div class="actions" style="margin-top:12px"><button class="secondary" id="selectAll">Tümünü seç</button><button class="secondary" id="clearAll">Seçimi temizle</button></div>
 </section>
 <section class="card">
@@ -217,13 +217,15 @@ $('sendSelected').onclick=()=>{
  if(ready.length>1&&!confirm(`${ready.length} WhatsApp sohbeti sırayla açılacak. Her birinde gönder düğmesine sen basmalısın. Devam edilsin mi?`))return;
  let i=0;
  function next(){
-  if(i>=ready.length){$('sendStatus').textContent='Tüm sohbetler açıldı. Her sohbette mesajı kontrol edip kendin gönder.';return}
+  if(i>=ready.length){$('sendStatus').textContent='Seçilen velilerin sohbetleri açıldı. Öğrenciler otomatik işaretlendi; her WhatsApp sohbetinde mesajı kontrol edip kendin gönder.';return}
   const s=ready[i++];
   // Her veliye yalnızca kendi öğrencisinin mesajını gönder.
   // Hazır şablonlarda mesajı öğrenci adına göre yeniden oluştur; birleşik önizlemeyi kullanma.
   const perText=$('template').value==='custom' ? text : templates[$('template').value](s.name);
-  $('sendStatus').textContent=`${i}/${ready.length}: ${s.name} velisinin WhatsApp sohbeti açılıyor. Gönderdikten sonra bu sayfaya dönüp Sonraki veli düğmesine bas.`;
+  $('sendStatus').textContent=`${i}/${ready.length}: ${s.name} velisinin WhatsApp sohbeti açılıyor. Öğrenci otomatik olarak gönderildi işaretlendi; WhatsApp'ta mesajı sen göndermelisin.`;
   window.open('https://wa.me/'+s.phone+'?text='+encodeURIComponent(perText),'_blank');
+  // WhatsApp mesajının gönderildiği doğrulanamaz; sohbet açılır açılmaz otomatik işaretle.
+  s.sent=true; save();
   if(i<ready.length){
    const old=$('sendSelected');old.textContent='Sonraki veli ('+(i+1)+'/'+ready.length+')';
    old.onclick=()=>next();
@@ -299,44 +301,4 @@ $('excelFile').addEventListener('change',async e=>{
   const ws=wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
   if(!rows.length)throw new Error('Dosyada başlık satırından sonra öğrenci kaydı bulunamadı.');
-  const norm=s=>String(s||'').toLocaleLowerCase('tr').replace(/[ıİ]/g,'i').replace(/[^a-z0-9]/g,'');
-  const keys=Object.keys(rows[0]);
-  const findKey=tests=>keys.find(k=>tests.includes(norm(k)));
-  const classKey=findKey(['sinif','sinifadi','sube','class','className'.toLowerCase()]);
-  const nameKey=findKey(['ogrenciadisoyadi','ogrenciadi','adsoyad','ogrenci','studentname','name']);
-  const phoneKey=findKey(['velitelefonu','velinumarasi','telefon','telefonnumarasi','telefonno','veli','phone','parentphone','tel']);
-  if(!nameKey)throw new Error('Öğrenci adı sütunu bulunamadı. Başlık: “Öğrenci Adı Soyadı” olmalı.');
-  const imported=rows.map((r,i)=>{
-   const name=String(r[nameKey]||'').trim();
-   if(!name)return null;
-   const className=String((classKey&&r[classKey])||'Sınıfsız').trim()||'Sınıfsız';
-   const phone=String((phoneKey&&r[phoneKey])||'').trim();
-   return {name,className,phone:phone?normalize(phone):''};
-  }).filter(Boolean);
-  if(!imported.length)throw new Error('Aktarılabilecek öğrenci bulunamadı.');
-  const newRows=[];let updated=0,skipped=0;
-  imported.forEach(s=>{
-   let existing=data.find(d=>d.name.trim().toLocaleLowerCase('tr')===s.name.toLocaleLowerCase('tr')&&(d.className||'Sınıfsız').toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr'));
-   if(existing){
-    if(!existing.phone&&s.phone){existing.phone=s.phone;updated++}else skipped++;
-   }else{
-    newRows.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,8)+newRows.length,name:s.name,phone:s.phone,className:s.className});
-   }
-   if(!classes.some(c=>c.toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr')))classes.push(s.className);
-  });
-  const addedClasses=classes.length;
-  data=data.concat(newRows);
-  if(!confirm(`Dosyadan ${imported.length} kayıt okundu.\nYeni eklenecek öğrenci: ${newRows.length}\nMevcut kayıtta telefon bilgisi tamamlanacak: ${updated}\nAtlanacak tekrar kayıt: ${skipped}\n\nDevam edilsin mi?`))return;
-  classes.sort((a,b)=>a.localeCompare(b,'tr',{numeric:true}));
-  save();refreshClassSelectors();
-  $('importStatus').textContent=`Aktarım tamamlandı: ${newRows.length} öğrenci eklendi, ${updated} telefon tamamlandı, ${skipped} tekrar kayıt atlandı.`;
- }catch(err){alert('Excel aktarımı başarısız: '+(err&&err.message?err.message:'Dosyayı kontrol et.'))}
- finally{e.target.value=''}
-});
-
-refreshClassSelectors();
-$('message').value='';
-render();
-</script>
-</body>
-</html>
+  const no
