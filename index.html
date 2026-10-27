@@ -137,7 +137,7 @@ function render(){
   const checked=selected.has(s.id)?'checked':'';
   const contact=s.phone?`<div class="sub">Veli: ${esc(s.phone)}</div>`:'<div class="sub">Veli numarası eşleştirilmedi</div>';
   el.innerHTML=`<input type="checkbox" aria-label="Seç" ${checked}><div class="name">${esc(s.name)}<div class="sub">${esc(s.className||'Sınıfsız')}</div>${contact}</div><button class="secondary small contact">Veli seç</button><button class="secondary small edit">Düzenle</button><button class="${s.sent?'secondary':'green'} small sentToggle">${s.sent?'İşareti geri al':'Gönderildi'}</button><button class="secondary small delete" aria-label="Sil">Sil</button>`;
-  el.querySelector('input').addEventListener('change',e=>{e.target.checked?selected.add(s.id):selected.delete(s.id)});
+  el.querySelector('input').addEventListener('change',e=>{e.target.checked?selected.add(s.id):selected.delete(s.id);refreshMessage();resetSendButton()});
   el.querySelector('.sentToggle').onclick=()=>{s.sent=!s.sent;save()};
    el.querySelector('.contact').onclick=()=>chooseContact(s.id);
   el.querySelector('.edit').onclick=()=>editStudent(s.id);
@@ -196,7 +196,7 @@ $('resetSent').onclick=()=>{
 $('classFilter').addEventListener('change',render);
 $('search').addEventListener('input',render);
 $('selectAll').onclick=()=>{data.forEach(s=>selected.add(s.id));render()};
-$('clearAll').onclick=()=>{selected.clear();render()};
+$('clearAll').onclick=()=>{selected.clear();render();refreshMessage();resetSendButton()};
 function selectedStudents(){return data.filter(s=>selected.has(s.id))}
 function buildMessage(names){
  const type=$('template').value;
@@ -205,37 +205,48 @@ function buildMessage(names){
  return names.map(n=>templates[type](n)).join('\n\n———\n\n');
 }
 function refreshMessage(){const names=selectedStudents().map(s=>s.name);$('message').value=names.length?buildMessage(names):''}
-$('template').onchange=refreshMessage;
+$('template').onchange=()=>{refreshMessage();resetSendButton()};
 $('refreshMessage').onclick=refreshMessage;
-$('sendSelected').onclick=()=>{
+function resetSendButton(){
+ const btn=$('sendSelected');
+ btn.textContent='Seçili velilere WhatsApp\'ta aç';
+ btn.onclick=startSending;
+}
+function startSending(){
  const chosen=selectedStudents();
  if(!chosen.length){alert('Önce en az bir öğrenci seç.');return}
  const missing=chosen.filter(s=>!s.phone);
  if(missing.length){alert('Önce şu öğrencilerin velilerini eşleştir:\n'+missing.map(s=>'• '+s.name).join('\n'));return}
+ const templateType=$('template').value;
  const text=$('message').value.trim();if(!text){alert('Mesaj metni boş.');return}
  const ready=chosen.filter(s=>s.phone);
  if(ready.length>1&&!confirm(`${ready.length} WhatsApp sohbeti sırayla açılacak. Her birinde gönder düğmesine sen basmalısın. Devam edilsin mi?`))return;
  let i=0;
  function next(){
-  if(i>=ready.length){$('sendStatus').textContent='Seçilen velilerin sohbetleri açıldı. Öğrenciler otomatik işaretlendi; her WhatsApp sohbetinde mesajı kontrol edip kendin gönder.';return}
+  if(i>=ready.length){finishBatch();return}
   const s=ready[i++];
-  // Her veliye yalnızca kendi öğrencisinin mesajını gönder.
-  // Hazır şablonlarda mesajı öğrenci adına göre yeniden oluştur; birleşik önizlemeyi kullanma.
-  const perText=$('template').value==='custom' ? text : templates[$('template').value](s.name);
+  // Her veliye yalnızca o anki şablona göre kendi öğrencisinin mesajını hazırla.
+  const perText=templateType==='custom' ? text : templates[templateType](s.name);
   $('sendStatus').textContent=`${i}/${ready.length}: ${s.name} velisinin WhatsApp sohbeti açılıyor. Öğrenci otomatik olarak gönderildi işaretlendi; WhatsApp'ta mesajı sen göndermelisin.`;
   window.open('https://wa.me/'+s.phone+'?text='+encodeURIComponent(perText),'_blank');
-  // WhatsApp mesajının gönderildiği doğrulanamaz; sohbet açılır açılmaz otomatik işaretle.
+  // WhatsApp mesajının gönderildiği doğrulanamaz; sohbet açılınca otomatik işaretle.
   s.sent=true; save();
   if(i<ready.length){
-   const old=$('sendSelected');old.textContent='Sonraki veli ('+(i+1)+'/'+ready.length+')';
-   old.onclick=()=>next();
+   const btn=$('sendSelected');btn.textContent='Sonraki veli ('+(i+1)+'/'+ready.length+')';btn.onclick=next;
   }else{
-   $('sendSelected').textContent='WhatsApp’ta tekrar aç';
-   $('sendSelected').onclick=()=>{window.open('https://wa.me/'+s.phone+'?text='+encodeURIComponent(text),'_blank')};
+   finishBatch();
   }
  }
+ function finishBatch(){
+  selected.clear();
+  $('message').value='';
+  $('sendStatus').textContent='Bu gönderim grubu tamamlandı. Yeni öğrencileri seçip yeni mesaj türünü belirleyebilirsin.';
+  resetSendButton();
+  render();
+ }
  next();
-};
+}
+$('sendSelected').onclick=startSending;
 
 function downloadBackup(){
  const payload={
@@ -299,46 +310,4 @@ $('excelFile').addEventListener('change',async e=>{
   const buffer=await file.arrayBuffer();
   const wb=XLSX.read(buffer,{type:'array',raw:false});
   const ws=wb.Sheets[wb.SheetNames[0]];
-  const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
-  if(!rows.length)throw new Error('Dosyada başlık satırından sonra öğrenci kaydı bulunamadı.');
-  const norm=s=>String(s||'').toLocaleLowerCase('tr').replace(/[ıİ]/g,'i').replace(/[^a-z0-9]/g,'');
-  const keys=Object.keys(rows[0]);
-  const findKey=tests=>keys.find(k=>tests.includes(norm(k)));
-  const classKey=findKey(['sinif','sinifadi','sube','class','className'.toLowerCase()]);
-  const nameKey=findKey(['ogrenciadisoyadi','ogrenciadi','adsoyad','ogrenci','studentname','name']);
-  const phoneKey=findKey(['velitelefonu','velinumarasi','telefon','telefonnumarasi','telefonno','veli','phone','parentphone','tel']);
-  if(!nameKey)throw new Error('Öğrenci adı sütunu bulunamadı. Başlık: “Öğrenci Adı Soyadı” olmalı.');
-  const imported=rows.map((r,i)=>{
-   const name=String(r[nameKey]||'').trim();
-   if(!name)return null;
-   const className=String((classKey&&r[classKey])||'Sınıfsız').trim()||'Sınıfsız';
-   const phone=String((phoneKey&&r[phoneKey])||'').trim();
-   return {name,className,phone:phone?normalize(phone):''};
-  }).filter(Boolean);
-  if(!imported.length)throw new Error('Aktarılabilecek öğrenci bulunamadı.');
-  const newRows=[];let updated=0,skipped=0;
-  imported.forEach(s=>{
-   let existing=data.find(d=>d.name.trim().toLocaleLowerCase('tr')===s.name.toLocaleLowerCase('tr')&&(d.className||'Sınıfsız').toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr'));
-   if(existing){
-    if(!existing.phone&&s.phone){existing.phone=s.phone;updated++}else skipped++;
-   }else{
-    newRows.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,8)+newRows.length,name:s.name,phone:s.phone,className:s.className});
-   }
-   if(!classes.some(c=>c.toLocaleLowerCase('tr')===s.className.toLocaleLowerCase('tr')))classes.push(s.className);
-  });
-  const addedClasses=classes.length;
-  data=data.concat(newRows);
-  if(!confirm(`Dosyadan ${imported.length} kayıt okundu.\nYeni eklenecek öğrenci: ${newRows.length}\nMevcut kayıtta telefon bilgisi tamamlanacak: ${updated}\nAtlanacak tekrar kayıt: ${skipped}\n\nDevam edilsin mi?`))return;
-  classes.sort((a,b)=>a.localeCompare(b,'tr',{numeric:true}));
-  save();refreshClassSelectors();
-  $('importStatus').textContent=`Aktarım tamamlandı: ${newRows.length} öğrenci eklendi, ${updated} telefon tamamlandı, ${skipped} tekrar kayıt atlandı.`;
- }catch(err){alert('Excel aktarımı başarısız: '+(err&&err.message?err.message:'Dosyayı kontrol et.'))}
- finally{e.target.value=''}
-});
-
-refreshClassSelectors();
-$('message').value='';
-render();
-</script>
-</body>
-</html>
+  const rows=XLSX.utils.sheet_to_json(ws,
